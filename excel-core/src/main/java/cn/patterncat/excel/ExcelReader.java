@@ -15,28 +15,24 @@ import java.util.stream.IntStream;
  */
 public class ExcelReader {
 
-    public static <T> List<T> read(InputStream inputStream, int sheetIndex, int dataRowIndex, RowToBeanConverter<T> rowToBeanConverter) throws IOException, InvalidFormatException {
+    /**
+     * 适用只读一次的场景
+     * @param inputStream
+     * @param sheetIndex
+     * @param dataRowIndex
+     * @param rowToBeanConverter
+     * @param <T>
+     * @return
+     * @throws IOException
+     * @throws InvalidFormatException
+     */
+    public static <T> List<T> readAndCloseStream(InputStream inputStream, int sheetIndex, int dataRowIndex, RowToBeanConverter<T> rowToBeanConverter) throws IOException, InvalidFormatException {
         Workbook workbook = null;
         try {
             workbook = WorkbookFactory.create(inputStream);
             Sheet sheet = workbook.getSheetAt(sheetIndex);
             //总行数=sheet.getLastRowNum() + 1
-            List<T> result = IntStream.range(dataRowIndex, sheet.getLastRowNum() + 1)
-                    .mapToObj(i -> {
-                        try{
-                            Row row = sheet.getRow(i);
-                            //如果sheet中间有空行,这里会是null
-                            if (row == null) {
-                                return null;
-                            }
-                            return rowToBeanConverter.from(row);
-                        }catch (Exception e){
-                            e.printStackTrace();
-                            return null;
-                        }
-                    })
-                    .filter(e -> e != null)
-                    .collect(Collectors.toList());
+            List<T> result = read(workbook,sheetIndex,dataRowIndex,rowToBeanConverter);
             return result;
         } finally {
             if (workbook != null) {
@@ -44,6 +40,39 @@ public class ExcelReader {
             }
             IOUtils.closeQuietly(inputStream);
         }
+    }
+
+    /**
+     * 不关闭workbook,方便读取其他sheet
+     * @param workbook
+     * @param sheetIndex
+     * @param dataRowIndex
+     * @param rowToBeanConverter
+     * @param <T>
+     * @return
+     * @throws IOException
+     * @throws InvalidFormatException
+     */
+    public static <T> List<T> read(Workbook workbook, int sheetIndex, int dataRowIndex, RowToBeanConverter<T> rowToBeanConverter) throws IOException, InvalidFormatException{
+        Sheet sheet = workbook.getSheetAt(sheetIndex);
+        //总行数=sheet.getLastRowNum() + 1
+        List<T> result = IntStream.range(dataRowIndex, sheet.getLastRowNum() + 1)
+                .mapToObj(i -> {
+                    try{
+                        Row row = sheet.getRow(i);
+                        //如果sheet中间有空行,这里会是null
+                        if (row == null) {
+                            return null;
+                        }
+                        return rowToBeanConverter.from(row);
+                    }catch (Exception e){
+                        e.printStackTrace();
+                        return null;
+                    }
+                })
+                .filter(e -> e != null)
+                .collect(Collectors.toList());
+        return result;
     }
 
     public static String getCellStringValue(Cell cell) {
